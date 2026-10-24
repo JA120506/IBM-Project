@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HydroGuard AI - Predictive Flood Telemetry & Summarizer</title>
+    <meta name="description" content="A real-time predictive flood early warning system. Analyze meteorological and hydrological data using advanced NLP analysis and localized maps.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Leaflet.js Map CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Marked.js for rendering markdown summaries -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- Custom Style Sheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=4.2">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    
+    <!-- Top Calamity Alert Banner -->
+    <div id="calamityTickerContainer" class="ticker-container hidden">
+        <div class="ticker-wrap">
+            <div class="ticker-content" id="calamityTickerText">
+                <!-- Ticker Warning Text will be injected here -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="app-container">
+        <!-- Main Navigation & Header -->
+        <header class="app-header">
+            <div class="logo-section">
+                <div class="logo-icon-container">
+                    <i class="fa-solid fa-droplet logo-icon"></i>
+                    <div class="pulse-ring"></div>
+                </div>
+                <div>
+                    <h1>HYDROGUARD AI</h1>
+                    <p class="tagline">Predictive Flood Telemetry & NLP Summarizer</p>
+                </div>
+            </div>
+            
+            <!-- Language Selector -->
+            <div class="lang-selector-container">
+                <i class="fa-solid fa-language lang-globe"></i>
+                <select id="langSelect">
+                    <option value="en">English (EN)</option>
+                    <option value="es">Español (ES)</option>
+                    <option value="hi">हिन्दी (HI)</option>
+                    <option value="fr">Français (FR)</option>
+                    <option value="bn">বাংলা (BN)</option>
+                </select>
+            </div>
+            
+            <!-- Theme Toggle -->
+            <div class="theme-toggle-container">
+                <button id="themeToggleBtn" class="theme-toggle-btn" title="Toggle Light/Dark Theme">
+                    <i class="fa-solid fa-sun icon-sun"></i>
+                    <i class="fa-solid fa-moon icon-moon"></i>
+                </button>
+            </div>
+            
+            <!-- Location Search -->
+            <div class="search-section">
+                <form id="searchForm" class="search-bar">
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                    <input type="text" id="locationInput" placeholder="Search city, state or country, e.g., Venice, Veneto, Italy..." required autocomplete="off">
+                    <button type="button" id="gpsButton" class="gps-btn" title="Detect Current GPS Location">
+                        <i class="fa-solid fa-location-crosshairs"></i>
+                    </button>
+                    <button type="submit" id="searchButton">
+                        <span>Analyze</span>
+                        <i class="fa-solid fa-chart-line button-loader"></i>
+                    </button>
+                </form>
+                <div id="searchAutocompleteList" class="search-autocomplete-list hidden"></div>
+            </div>
+        </header>
+
+        <!-- Presets Selection Bar -->
+        <section class="presets-section">
+            <span class="presets-label"><i class="fa-solid fa-location-crosshairs"></i> Presets:</span>
+            <div id="presetsContainer" class="presets-grid">
+                <button class="preset-btn skeleton" disabled>Loading...</button>
+                <button class="preset-btn skeleton" disabled>Loading...</button>
+            </div>
+        </section>
+
+        <!-- Manual Coordinates Expansion Bar -->
+        <section class="manual-coordinates-section card glass-card">
+            <button type="button" id="toggleCoordsBtn" class="coords-expand-btn">
+                <span><i class="fa-solid fa-compass"></i> Manual GPS Coordinates Input</span>
+                <i class="fa-solid fa-chevron-down arrow-icon" id="coordsArrow"></i>
+            </button>
+            <form id="coordsForm" class="coords-form hidden">
+                <div class="coords-input-grid">
+                    <div class="coord-field">
+                        <label for="latInput">Latitude</label>
+                        <input type="number" step="any" id="latInput" placeholder="e.g. 25.7617">
+                    </div>
+                    <div class="coord-field">
+                        <label for="lonInput">Longitude</label>
+                        <input type="number" step="any" id="lonInput" placeholder="e.g. -80.1918">
+                    </div>
+                    <div class="coord-field name-field">
+                        <label for="nameInput">Location Name (Optional)</label>
+                        <input type="text" id="nameInput" placeholder="e.g. My Station">
+                    </div>
+                </div>
+                <button type="submit" class="coords-submit-btn">Load Coordinates</button>
+            </form>
+        </section>
+
+        <!-- Main Mode Tabs -->
+        <nav class="app-tabs">
+            <button class="tab-link active" data-tab="dashboardTab">
+                <i class="fa-solid fa-circle-nodes"></i> Telemetry Dashboard
+            </button>
+            <button class="tab-link" data-tab="chatTab">
+                <i class="fa-solid fa-brain"></i> AI Disaster Assistant
+            </button>
+        </nav>
+
+        <!-- Main Dashboard Viewport -->
+        <main class="dashboard-viewport" id="mainDashboard">
+            
+            <!-- Initial/Loading State Overlay -->
+            <div id="loadingOverlay" class="loading-overlay hidden">
+                <div class="loader-content">
+                    <div class="radar-scan"></div>
+                    <i class="fa-solid fa-satellite-dish loading-icon"></i>
+                    <p>Polling Global Meteorological Telemetry...</p>
+                    <span class="loader-subtext">Retrieving precipitation models and river discharge projections</span>
+                </div>
+            </div>
+
+            <!-- TAB 1: TELEMETRY DASHBOARD -->
+            <div id="dashboardTab" class="tab-content active">
+                <div class="dashboard-grid">
+                    
+                    <!-- COLUMN 1: Telemetry & Threat Summary -->
+                    <div class="col-left">
+                        <!-- Threat Assessment Summary Card -->
+                        <div class="card glass-card risk-card" id="riskCard">
+                            <div class="card-header">
+                                <h2><i class="fa-solid fa-triangle-exclamation"></i> Early Warning Level</h2>
+                                <span class="timestamp" id="lastUpdated">Sensor Data: Live</span>
+                            </div>
+                            <div class="risk-body">
+                                <div class="risk-gauge-container">
+                                    <svg class="risk-gauge" viewBox="0 0 120 120">
+                                        <circle class="gauge-bg" cx="60" cy="60" r="50"></circle>
+                                        <circle class="gauge-progress" cx="60" cy="60" r="50" id="gaugeProgress"></circle>
+                                    </svg>
+                                    <div class="risk-value-box">
+                                        <span class="risk-score" id="riskScore">0.0</span>
+                                        <span class="risk-label" id="riskLevelText">NORMAL</span>
+                                    </div>
+                                </div>
+                                <div class="risk-meta">
+                                    <h3 id="locationName">Search a location to scan</h3>
+                                    <p id="locationCoordinates">Latitude: -- | Longitude: --</p>
+                                    <span class="badge" id="riskBadge">SYSTEM IDLE</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Telemetry Cards Grid -->
+                        <div class="telemetry-subgrid">
+                            <!-- Precipitation Card -->
+                            <div class="card glass-card data-card">
+                                <div class="data-header">
+                                    <span class="data-icon-bg rain"><i class="fa-solid fa-cloud-showers-heavy"></i></span>
+                                    <div>
+                                        <h3>Precipitation 7D</h3>
+                                        <p class="data-value" id="valPrecipSum">-- <span class="unit">mm</span></p>
+                                    </div>
+                                </div>
+                                <div class="data-footer">
+                                    <span id="valPrecipPeak">Peak Rate: -- mm/h</span>
+                                    <span id="valConsecutiveRain">Wet Days: --</span>
+                                </div>
+                            </div>
+
+                            <!-- River Discharge Card -->
+                            <div class="card glass-card data-card">
+                                <div class="data-header">
+                                    <span class="data-icon-bg discharge"><i class="fa-solid fa-water"></i></span>
+                                    <div>
+                                        <h3>Peak Discharge</h3>
+                                        <p class="data-value" id="valDischargePeak">-- <span class="unit">m³/s</span></p>
+                                    </div>
+                                </div>
+                                <div class="data-footer">
+                                    <span id="valDischargeStart">Baseline: -- m³/s</span>
+                                    <span id="valDischargeSurge">Surge Ratio: --</span>
+                                </div>
+                            </div>
+                            
+                            
+                            <div class="card glass-card data-card climate-card-full">
+                                <div class="data-header">
+                                    <span class="data-icon-bg climate"><i class="fa-solid fa-temperature-half"></i></span>
+                                    <div>
+                                        <h3>Climatic Conditions</h3>
+                                        <p class="data-value" id="valWeatherDesc">No Data</p>
+                                    </div>
+                                </div>
+                                <div class="climate-body">
+                                    <div class="climate-item">
+                                        <span class="label">Wind Speed</span>
+                                        <span class="val" id="valWindSpeed">-- km/h</span>
+                                    </div>
+                                    <div class="climate-item">
+                                        <span class="label">Humidity</span>
+                                        <span class="val" id="valHumidity">--%</span>
+                                    </div>
+                                    <div class="climate-item">
+                                        <span class="label">Air Pressure</span>
+                                        <span class="val" id="valPressure">-- hPa</span>
+                                    </div>
+                                    <div class="climate-item">
+                                        <span class="label">Max UV Index</span>
+                                        <span class="val" id="valUV">--</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- AI Summarizer Output Card -->
+                        <div class="card glass-card summary-card">
+                            <div class="card-header">
+                                <h2><i class="fa-solid fa-brain"></i> Threat Summary Report</h2>
+                                <div class="report-actions">
+                                    <button class="action-btn" id="btnCopyReport" title="Copy Report to Clipboard">
+                                        <i class="fa-regular fa-copy"></i>
+                                    </button>
+                                    <button class="action-btn" id="btnDownloadReport" title="Download Report as Markdown">
+                                        <i class="fa-solid fa-file-arrow-down"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="summary-body" id="reportContent">
+                                <div class="empty-state">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    <p>Provide a location or select a preset scenario above to compile a comprehensive flood risk assessment.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- COLUMN 2: Maps and Analytics -->
+                    <div class="col-right">
+                        <!-- Map Card -->
+                        <div class="card glass-card map-card">
+                            <div class="card-header">
+                                <h2><i class="fa-solid fa-earth-americas"></i> Satellite Hazard Zone Overlay</h2>
+                            </div>
+                            <div class="map-container-wrapper">
+                                <div id="leafletMap" class="map-viewport"></div>
+                                <div class="map-legend">
+                                    <span class="legend-item"><span class="dot low"></span> Low</span>
+                                    <span class="legend-item"><span class="dot moderate"></span> Moderate</span>
+                                    <span class="legend-item"><span class="dot high"></span> High</span>
+                                    <span class="legend-item"><span class="dot extreme"></span> Extreme</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Hydro-Met Forecast Trend Card -->
+                        <div class="card glass-card chart-card">
+                            <div class="card-header">
+                                <h2><i class="fa-solid fa-chart-area"></i> Precipitation vs. Hydrology Forecast (7D)</h2>
+                            </div>
+                            <div class="chart-container-wrapper">
+                                <canvas id="trendChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- TAB 2: AI SAFETY ASSISTANT CHATBOT -->
+            <div id="chatTab" class="tab-content">
+                <div class="chat-layout">
+                    <!-- Left Sidebar - Prompts & Guidelines -->
+                    <div class="chat-sidebar card glass-card">
+                        <div class="sidebar-header">
+                            <h3><i class="fa-solid fa-circle-info"></i> AI Safety Copilot</h3>
+                            <p>Query flood safety models and localized emergency checklists directly.</p>
+                        </div>
+                        <div class="sidebar-content">
+                            <h4>Suggested Inquiries</h4>
+                            <div class="suggested-prompts">
+                                <button class="prompt-chip" data-prompt="What should I pack in my emergency evacuation bag?">
+                                    <i class="fa-solid fa-suitcase"></i> Packing Checklists
+                                </button>
+                                <button class="prompt-chip" data-prompt="What is the critical evacuation protocol if risk increases?">
+                                    <i class="fa-solid fa-truck-medical"></i> Evacuation Protocol
+                                </button>
+                                <button class="prompt-chip" data-prompt="What does the river discharge flow in m3/s indicate for flood danger?">
+                                    <i class="fa-solid fa-water"></i> Understanding Discharge
+                                </button>
+                                <button class="prompt-chip" data-prompt="How do I read precipitation volumes in terms of flood risk?">
+                                    <i class="fa-solid fa-cloud-rain"></i> Rainfall Thresholds
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Container - Chat Log -->
+                    <div class="chat-container card glass-card">
+                        <div class="chat-header">
+                            <div class="bot-badge">
+                                <span class="indicator-dot blinking"></span>
+                                <span>AI Disaster Responder</span>
+                            </div>
+                            <p class="current-context-text" id="chatContextText">Active Scan Location: None</p>
+                        </div>
+                        <div class="chat-log" id="chatLog">
+                            <!-- Automated Initial Bot Welcome -->
+                            <div class="chat-message bot">
+                                <div class="msg-bubble">
+                                    <p>Hello! I am your AI Disaster Safety Assistant. Search any location, and I can give you custom checklists, safety summaries, and detailed explanations of river metrics based on the active telemetry sensors.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chat-input-bar">
+                            <form id="chatForm">
+                                <input type="text" id="chatInput" placeholder="Ask about checklists, water metrics, or emergency routes..." autocomplete="off" required>
+                                <button type="submit" id="chatSendButton">
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            </div>
+        </main>
+        
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="footer-links">
+                <a href="https://render.com/deploy" target="_blank" rel="noopener noreferrer">Deploy on Render</a>
+                <a href="https://vercel.com/new" target="_blank" rel="noopener noreferrer">Deploy on Vercel</a>
+            </div>
+            <p>HydroGuard AI • Developed in Python & Javascript • Live Weather & Hydrological Forecast Telemetry Powered by Open-Meteo</p>
+        </footer>
+    </div>
+
+    <!-- Main Client-Side Logic -->
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=4.2"></script>
+</body>
+</html>
